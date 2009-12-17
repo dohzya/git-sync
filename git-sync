@@ -1,6 +1,8 @@
 #!/usr/bin/env ruby
 
-opts = {}
+opts = {
+  :verbose => $VERBOSE
+}
 remotes = []
 while arg = ARGV.shift
   case arg
@@ -14,13 +16,15 @@ while arg = ARGV.shift
     opts[:force] = opts[:prune] = true
   when /--dry-run/
     opts[:dry_run] = true
+  when /-v|--verbose/
+    opts[:verbose] = true
   else
     remotes << arg
   end
 end
 res = remotes.each do |remote_name|
   next if remote_name.empty?
-  puts "#{remote_name}:" if $VERBOSE
+  puts "#{remote_name}:" if opts[:verbose]
   refs = {}
   %x(git show-ref --heads --tags).each_line do |line|
     hash, ref = line.split(/\s+/)
@@ -33,22 +37,22 @@ res = remotes.each do |remote_name|
   end
   actions = refs.map do |ref, hashes|
     if hashes.is_a? String
-      puts "  new ref: #{ref} (#{hashes})" if $VERBOSE
+      puts "  new ref: #{ref} (#{hashes})" if opts[:verbose]
       "#{ref}:#{ref}"
     else
       local, remote = hashes
       case
       when local.nil?
         if opts[:prune]
-          puts "  prune ref: #{ref} (#{remote})" if $VERBOSE
+          puts "  prune ref: #{ref} (#{remote})" if opts[:verbose]
           ":#{ref}"
         else
-          puts "  orphan ref: #{ref} (#{local})" if $VERBOSE
+          puts "  orphan ref: #{ref} (#{local})" if opts[:verbose]
         end
       when local == remote
-        puts "  same ref: #{ref} (#{local})" if $VERBOSE
+        puts "  same ref: #{ref} (#{local})" if opts[:verbose]
       else
-        puts "  update ref: #{ref} (#{remote} => #{local})" if $VERBOSE
+        puts "  update ref: #{ref} (#{remote} => #{local})" if opts[:verbose]
         "#{opts[:force] ? '+' : ''}#{ref}:#{ref}"
       end
     end
@@ -58,7 +62,7 @@ res = remotes.each do |remote_name|
     if opts[:dry_run]
       puts cmd
     else
-      puts cmd if $VERBOSE
+      puts cmd if opts[:verbose]
       %x(#{cmd})
     end
   end
