@@ -1,0 +1,51 @@
+#!/usr/bin/env ruby
+
+opts = {}
+remotes = []
+while arg = ARGV.shift
+  case arg
+  when /-a|--all/
+    %x(git remote).each_line{|remote| remote.chomp! ; remotes << remote }
+  when /-f|--force/
+    opts[:force] = true
+  when /-p|--prune/
+    opts[:prune] = true
+  when /-s|--sync/
+    opts[:force] = opts[:prune] = true
+  when /--dry-run/
+    opts[:dry_run] = true
+  else
+    remotes << arg
+  end
+end
+res = remotes.map do |remote_name|
+  next if remote_name.empty?
+  ptn = "remotes/#{remote_name}/"
+  branches = {}
+  %x(git branch).each_line do |branch|
+    branch = branch.sub(/^[* ] (.*)\n$/, '\1')
+    branches[branch] = :add
+  end
+  %x(git branch -a).find_all{|l| l =~ /#{ptn}/ && l !~ /HEAD ->/ }.each do |branch|
+    branch = branch.sub(/^  #{ptn}(.*)\n$/, '\1')
+    if branches.include?(branch)
+      branches[branch] = :sync
+    else
+      branches[branch] = :remove
+    end
+  end
+  actions = branches.map do |branch, action|
+    action = case action
+    when :add, :sync
+      "#{opts[:force] ? '+' : ''}#{branch}"
+    when :remove
+      opts[:prune] ? ":#{branch}" : nil
+    end
+  end.compact
+  cmd = "git push #{remote_name} #{actions.join(' ')}"
+  if opts[:dry_run]
+    puts cmd
+  else
+    %x(#{cmd})
+  end
+end
