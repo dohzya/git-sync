@@ -20,6 +20,7 @@ while arg = ARGV.shift
 end
 res = remotes.each do |remote_name|
   next if remote_name.empty?
+  puts "#{remote_name}:" if $VERBOSE
   refs = {}
   %x(git show-ref --heads --tags).each_line do |line|
     hash, ref = line.split(/\s+/)
@@ -32,16 +33,22 @@ res = remotes.each do |remote_name|
   end
   actions = refs.map do |ref, hashes|
     if hashes.is_a? String
+      puts "  new ref: #{ref} (#{hashes})" if $VERBOSE
       "#{ref}:#{ref}"
     else
       local, remote = hashes
       case
       when local.nil?
         if opts[:prune]
+          puts "  prune ref: #{ref} (#{remote})" if $VERBOSE
           ":#{ref}"
+        else
+          puts "  orphan ref: #{ref} (#{local})" if $VERBOSE
         end
       when local == remote
+        puts "  same ref: #{ref} (#{local})" if $VERBOSE
       else
+        puts "  update ref: #{ref} (#{remote} => #{local})" if $VERBOSE
         "#{opts[:force] ? '+' : ''}#{ref}:#{ref}"
       end
     end
@@ -51,6 +58,7 @@ res = remotes.each do |remote_name|
     if opts[:dry_run]
       puts cmd
     else
+      puts cmd if $VERBOSE
       %x(#{cmd})
     end
   end
