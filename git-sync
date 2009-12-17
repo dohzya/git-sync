@@ -18,6 +18,20 @@ while arg = ARGV.shift
     opts[:dry_run] = true
   when /-v|--verbose/
     opts[:verbose] = true
+  when /-h|--help/
+    warn <<USAGE
+usage: git sync [options] [<remote>...]
+
+options:
+  -a | --all      sync all remotes
+  -f | --force    force update (allow no-ff push)
+  -p | --prune    remove orphan refs (removed in local but still in remote)
+  -s | --sync     shortcut for -f -p
+  --dry-run       do not actually sync but show the command instead
+  -v | --verbose  display some extra informations
+  -h | --help     show this help
+USAGE
+    exit
   else
     remotes << arg
   end
