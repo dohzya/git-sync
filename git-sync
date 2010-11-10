@@ -1,42 +1,57 @@
 #!/usr/bin/env ruby
 
+def add_all_remotes!(opts)
+  if (remotes = %x(git config sync.remotes).chomp.split(' ')).empty?
+    remotes = %x(git remote).chomp.split("\n")
+  end
+  opts[:remotes] += remotes
+end
+
 opts = {
-  :verbose => $VERBOSE
+  :verbose => $VERBOSE,
+  :exclude => %x(git config sync.exclude).chomp,
+  :remotes => [],
 }
-remotes = []
 while arg = ARGV.shift
   case arg
-  when /-a|--all/
-    %x(git remote).each_line{|remote| remote.chomp! ; remotes << remote }
-  when /-f|--force/
-    opts[:force] = true
-  when /-p|--prune/
-    opts[:prune] = true
-  when /-s|--sync/
+  when /^(?:-a|--all)$/
+    add_all_remotes!(opts)
+  when /^(-e|--exclude)$/
+    opts[:exclude] = (arg =~ /=/ ? arg.sub(/.*=\s*/, '') : args.shift)
+  when /^(?:-f|--(no-)?force)$/
+    opts[:force] = !$1
+  when /^(?:-p|--(no-)?prune)$/
+    opts[:prune] = !$1
+  when /^(?:-s|--sync)$/
     opts[:force] = opts[:prune] = true
-  when /--dry-run/
-    opts[:dry_run] = true
-  when /-v|--verbose/
-    opts[:verbose] = true
-  when /-h|--help/
+  when /^(?:-n|--(no-)?dry-run)$/
+    opts[:dry_run] = !$1
+  when /^(?:-v|--(no-)?verbose)$/
+    opts[:verbose] = !$1
+  when /^(?:-h|--help$)/
     warn <<USAGE
 usage: git sync [options] [<remote>...]
 
 options:
-  -a | --all      sync all remotes
-  -f | --force    force update (allow no-ff push)
-  -p | --prune    remove orphan refs (removed in local but still in remote)
-  -s | --sync     shortcut for -f -p
-  --dry-run       do not actually sync but show the command instead
-  -v | --verbose  display some extra informations
-  -h | --help     show this help
+  -a | --all           sync all remotes
+  -e | --exclude       excluded branches (allow globbing)
+  -f | --[no-]force    force update (allow no-ff push)
+  -p | --[no-]prune    remove orphan refs (removed in local but still in remote)
+  -s | --sync          shortcut for -f -p
+  -n | --[no-]dry-run  do not actually sync but show the command instead
+  -v | --[no-]verbose  display some extra informations
+  -h | --help          show this help
 USAGE
     exit
   else
-    remotes << arg
+    opts[:remotes] << arg
   end
 end
-res = remotes.each do |remote_name|
+add_all_remotes!(opts) if opts[:remotes].empty?
+opts.delete(:exclude) if opts[:exclude].empty?
+opts[:exclude] &&= /#{opts[:exclude].gsub(/[*]/, '.*').gsub(/[?]/, '.')}/
+
+res = opts[:remotes].each do |remote_name|
   next if remote_name.empty?
   puts "#{remote_name}:" if opts[:verbose]
   refs = {}
@@ -50,7 +65,10 @@ res = remotes.each do |remote_name|
     refs[ref] = [refs[ref], hash]
   end
   actions = refs.map do |ref, hashes|
-    if hashes.is_a? String
+    if opts[:exclude] && ref =~ opts[:exclude]
+      puts "  ignore ref: #{ref}" if opts[:verbose]
+      next
+    elsif hashes.is_a? String
       puts "  new ref: #{ref} (#{hashes})" if opts[:verbose]
       "#{ref}:#{ref}"
     else
